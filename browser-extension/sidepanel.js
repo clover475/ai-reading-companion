@@ -1,7 +1,7 @@
 const DEFAULT_SETTINGS = {
   apiKey: "",
-  baseUrl: "https://api.openai.com/v1",
-  model: "gpt-4o-mini",
+  baseUrl: "https://api.deepseek.com",
+  model: "deepseek-chat",
   replyLength: "medium",
   defaultLanguage: "中文"
 };
@@ -73,7 +73,16 @@ async function loadSettings() {
   const localSettings = await loadLocalSettings();
   const storedSettings = stored.settings || {};
   state.settings = { ...DEFAULT_SETTINGS, ...localSettings, ...storedSettings };
-  if (!storedSettings.apiKey && localSettings.apiKey) {
+
+  const hasOldOpenAIDefaults =
+    storedSettings.baseUrl === "https://api.openai.com/v1" &&
+    (!storedSettings.model || storedSettings.model === "gpt-4o-mini");
+  if (hasOldOpenAIDefaults) {
+    state.settings.baseUrl = localSettings.baseUrl || DEFAULT_SETTINGS.baseUrl;
+    state.settings.model = localSettings.model || DEFAULT_SETTINGS.model;
+  }
+
+  if ((!storedSettings.apiKey && localSettings.apiKey) || hasOldOpenAIDefaults) {
     await chrome.storage.local.set({ settings: state.settings });
   }
   els.apiKey.value = state.settings.apiKey;
@@ -238,6 +247,7 @@ async function runAction(action) {
   }
 
   setBusy(true, "正在和 AI 陪读搭子沟通...");
+  els.answer.textContent = "正在阅读这段文字，稍等一下。";
 
   try {
     const userTurn = describeUserTurn(action, userInput);
@@ -259,7 +269,9 @@ async function runAction(action) {
 
     setStatus("完成");
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    els.answer.textContent = `请求失败：${message}`;
+    setStatus(message);
   } finally {
     setBusy(false);
   }
@@ -481,7 +493,9 @@ function setBusy(isBusy, statusText = "") {
     }
     button.disabled = isBusy;
   });
-  setStatus(statusText);
+  if (statusText) {
+    setStatus(statusText);
+  }
 }
 
 function setStatus(text) {

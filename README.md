@@ -5,7 +5,7 @@ AI 陪读搭子产品仓库，当前包含两个 MVP：
 - Obsidian 插件：在 Obsidian 里围绕当前资料和选中文本陪读，并把阅读卡片沉淀到笔记。
 - Chrome 插件：在网页、微信读书、博客和课程页面里围绕选中文本陪读，生成可复制回 Obsidian 的 Markdown 阅读卡片。
 
-两个端都优先兼容 OpenAI-compatible Chat Completions API，API Key 只保存在本地配置里，不写死在代码中。
+两个端都优先兼容 OpenAI-compatible Chat Completions API。浏览器插件默认按 DeepSeek 配置：`https://api.deepseek.com` + `deepseek-chat`。API Key 只保存在本地配置里，不写死在代码中。
 
 ## 项目结构
 

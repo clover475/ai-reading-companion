@@ -19,6 +19,7 @@ Chrome 插件 MVP：在网页、微信读书、博客、课程页面中读取用
 - 本地保存最近 20 张阅读卡片
 - 支持复制 Markdown 和下载 `.md`
 - API Key / Base URL / Model 本地配置，不写死在代码里
+- 默认 API 配置面向 DeepSeek：`https://api.deepseek.com` + `deepseek-chat`
 
 ## 安装测试
 
@@ -28,7 +29,7 @@ Chrome 插件 MVP：在网页、微信读书、博客、课程页面中读取用
 4. 选择本目录：`browser-extension/`
 5. 打开任意网页，选中一段文字
 6. 点击扩展图标，打开侧边栏
-7. 在「API 设置」里填写 API Key、Base URL 和 Model
+7. 在「API 设置」里填写 API Key、Base URL 和 Model。DeepSeek 默认值是 `https://api.deepseek.com` 和 `deepseek-chat`
 8. 如果自动捕获失败，可以把选中文本直接粘贴到「当前选中文本 / 可粘贴」
 9. 确认标题和 URL 正确，点击「生成阅读卡片」
 10. 点击「复制 Markdown」，回 Obsidian 粘贴
