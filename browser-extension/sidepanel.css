@@ -84,17 +84,15 @@ h1 {
   padding: 10px;
 }
 
-.source-title {
-  font-weight: 700;
-  overflow-wrap: anywhere;
+.source-title-input,
+.source-url-input {
+  margin-top: 6px;
 }
 
-.source-url {
-  display: block;
-  margin-top: 4px;
-  color: #3867d6;
+.source-meta {
+  margin-top: 6px;
+  color: #68707d;
   font-size: 12px;
-  overflow-wrap: anywhere;
 }
 
 .preview,
@@ -105,6 +103,11 @@ h1 {
   padding: 10px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.preview {
+  width: 100%;
+  resize: vertical;
 }
 
 .empty {

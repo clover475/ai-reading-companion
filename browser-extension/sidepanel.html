@@ -15,13 +15,14 @@
 
       <section class="source">
         <div class="label">当前来源</div>
-        <div id="sourceTitle" class="source-title">未捕获网页</div>
-        <a id="sourceUrl" class="source-url" href="#" target="_blank" rel="noreferrer"></a>
+        <input id="sourceTitle" class="source-title-input" type="text" placeholder="网页/书籍/文章标题">
+        <input id="sourceUrl" class="source-url-input" type="url" placeholder="网页链接 URL">
+        <div id="sourceMeta" class="source-meta">未捕获网页</div>
       </section>
 
       <section>
-        <div class="label">当前选中文本</div>
-        <div id="selectionPreview" class="preview empty">请先在网页、微信读书或文章页面中选中一段想一起读的文字。</div>
+        <div class="label">当前选中文本 / 可粘贴</div>
+        <textarea id="selectionPreview" class="preview empty" placeholder="请先在网页、微信读书或文章页面中选中一段文字；如果自动捕获失败，可以直接粘贴到这里。"></textarea>
       </section>
 
       <section>

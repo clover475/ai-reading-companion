@@ -28,6 +28,7 @@ const els = {
   refreshSelection: document.getElementById("refreshSelection"),
   sourceTitle: document.getElementById("sourceTitle"),
   sourceUrl: document.getElementById("sourceUrl"),
+  sourceMeta: document.getElementById("sourceMeta"),
   selectionPreview: document.getElementById("selectionPreview"),
   userInput: document.getElementById("userInput"),
   answer: document.getElementById("answer"),
@@ -53,6 +54,9 @@ async function init() {
   els.saveSettings.addEventListener("click", saveSettings);
   els.copyMarkdown.addEventListener("click", copyLatestMarkdown);
   els.downloadMarkdown.addEventListener("click", downloadLatestMarkdown);
+  els.selectionPreview.addEventListener("input", syncSelectionFromPanel);
+  els.sourceTitle.addEventListener("input", syncSelectionFromPanel);
+  els.sourceUrl.addEventListener("input", syncSelectionFromPanel);
 
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => runAction(button.dataset.action));
@@ -90,6 +94,10 @@ async function refreshSelection() {
     } catch {
       payload = null;
     }
+
+    if (!payload?.selectedText) {
+      payload = await captureSelectionWithScripting(tab.id);
+    }
   }
 
   if (!payload?.selectedText) {
@@ -97,32 +105,86 @@ async function refreshSelection() {
     payload = stored.latestSelection || payload;
   }
 
-  state.selection = payload?.selectedText ? payload : null;
+  state.selection = normalizeSelectionPayload(payload, tab);
   renderSelection();
+}
+
+async function captureSelectionWithScripting(tabId) {
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => ({
+        selectedText: window.getSelection()?.toString().trim() || "",
+        title: document.title || "",
+        url: location.href,
+        origin: location.origin,
+        siteName: location.hostname,
+        capturedAt: new Date().toISOString()
+      })
+    });
+    return result?.result || null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSelectionPayload(payload, tab) {
+  const url = payload?.url || tab?.url || "";
+  const siteName = payload?.siteName || safeHostname(url);
+  const title = payload?.title || tab?.title || "";
+  return {
+    selectedText: payload?.selectedText || "",
+    truncated: Boolean(payload?.truncated),
+    title,
+    url,
+    origin: payload?.origin || safeOrigin(url),
+    siteName,
+    capturedAt: payload?.capturedAt || new Date().toISOString()
+  };
 }
 
 function renderSelection() {
   const selection = state.selection;
-  if (!selection?.selectedText) {
-    els.sourceTitle.textContent = "未捕获网页";
-    els.sourceUrl.textContent = "";
-    els.sourceUrl.removeAttribute("href");
-    els.selectionPreview.textContent = "请先在网页、微信读书或文章页面中选中一段想一起读的文字。";
+  if (!selection?.selectedText && !selection?.title && !selection?.url) {
+    els.sourceTitle.value = "";
+    els.sourceUrl.value = "";
+    els.sourceMeta.textContent = "未捕获网页";
+    els.selectionPreview.value = "";
     els.selectionPreview.classList.add("empty");
     return;
   }
 
-  els.sourceTitle.textContent = selection.title || selection.siteName || "未命名网页";
-  els.sourceUrl.textContent = selection.url || "";
-  if (selection.url) els.sourceUrl.href = selection.url;
-  els.selectionPreview.textContent = selection.truncated
+  els.sourceTitle.value = selection.title || selection.siteName || "";
+  els.sourceUrl.value = selection.url || "";
+  els.sourceMeta.textContent = selection.siteName ? `来源站点：${selection.siteName}` : "来源站点：未识别";
+  els.selectionPreview.value = selection.truncated
     ? `${selection.selectedText}\n\n[选区过长，已截取前 6000 字]`
     : selection.selectedText;
-  els.selectionPreview.classList.remove("empty");
+  els.selectionPreview.classList.toggle("empty", !selection.selectedText);
+}
+
+function syncSelectionFromPanel() {
+  const current = state.selection || {};
+  const url = els.sourceUrl.value.trim();
+  state.selection = {
+    ...current,
+    selectedText: els.selectionPreview.value.trim(),
+    title: els.sourceTitle.value.trim(),
+    url,
+    origin: current.origin || safeOrigin(url),
+    siteName: current.siteName || safeHostname(url),
+    capturedAt: current.capturedAt || new Date().toISOString()
+  };
+  els.selectionPreview.classList.toggle("empty", !state.selection.selectedText);
+  els.sourceMeta.textContent = state.selection.siteName ? `来源站点：${state.selection.siteName}` : "来源站点：未识别";
 }
 
 async function runAction(action) {
-  await refreshSelection();
+  syncSelectionFromPanel();
+  if (!state.selection?.selectedText) {
+    await refreshSelection();
+    syncSelectionFromPanel();
+  }
   const selection = state.selection;
   const userInput = els.userInput.value.trim();
 
@@ -411,3 +473,18 @@ function sanitizeFileName(name) {
   return name.replace(/[\\/:*?"<>|]/g, "-").slice(0, 80);
 }
 
+function safeHostname(url) {
+  try {
+    return url ? new URL(url).hostname : "";
+  } catch {
+    return "";
+  }
+}
+
+function safeOrigin(url) {
+  try {
+    return url ? new URL(url).origin : "";
+  } catch {
+    return "";
+  }
+}
