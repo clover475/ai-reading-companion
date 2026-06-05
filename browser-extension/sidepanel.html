@@ -14,7 +14,7 @@
       </header>
 
       <section class="source">
-        <div class="label">当前来源</div>
+        <div class="label">阅读来源</div>
         <input id="sourceTitle" class="source-title-input" type="text" placeholder="网页/书籍/文章标题">
         <input id="sourceUrl" class="source-url-input" type="url" placeholder="网页链接 URL">
         <div id="sourceMeta" class="source-meta">未捕获网页</div>
@@ -25,30 +25,42 @@
         <textarea id="selectionPreview" class="preview empty" placeholder="请先在网页、微信读书或文章页面中选中一段文字；如果自动捕获失败，可以直接粘贴到这里。"></textarea>
       </section>
 
-      <section>
-        <div class="label">想问什么 / 可选</div>
-        <textarea id="userInput" placeholder="可不填。直接点「解释这段」「讲简单一点」「我读不进去了」也可以。"></textarea>
+      <section class="chat-section">
+        <div class="chat-header">
+          <div>
+            <div class="label">陪读对话</div>
+            <div class="hint">围绕这段材料持续追问，AI 会记住本次阅读里的最近对话。</div>
+          </div>
+          <button id="clearConversation" type="button">新对话</button>
+        </div>
+        <div id="conversationList" class="conversation-list"></div>
+        <textarea id="userInput" class="chat-input" placeholder="继续问点什么；也可以不填，直接点下面的快捷按钮。"></textarea>
+        <div class="actions">
+          <button data-action="free" type="button">发送</button>
+          <button data-action="explain" type="button">解释这段</button>
+          <button data-action="simplify" type="button">讲简单一点</button>
+          <button data-action="stuck" type="button">我读不进去了</button>
+          <button data-action="respond" type="button">回应我的想法</button>
+        </div>
       </section>
 
-      <section class="actions">
-        <button data-action="free" type="button">发送</button>
-        <button data-action="explain" type="button">解释这段</button>
-        <button data-action="simplify" type="button">讲简单一点</button>
-        <button data-action="stuck" type="button">我读不进去了</button>
-        <button data-action="respond" type="button">回应我的想法</button>
-        <button data-action="card" type="button" class="wide">生成阅读卡片</button>
+      <section class="finish">
+        <div class="label">结束这次阅读</div>
+        <p class="finish-copy">聊完以后，可以把这次陪读过程整理成一张 Markdown 阅读卡片，再复制回 Obsidian。</p>
+        <button id="generateCard" type="button">生成阅读卡片</button>
+        <article id="cardPreview" class="card-preview empty">还没有生成阅读卡片。</article>
+        <div class="card-actions">
+          <button id="copyMarkdown" type="button" disabled>复制 Markdown</button>
+          <button id="downloadMarkdown" type="button" disabled>下载 .md</button>
+        </div>
       </section>
 
-      <section class="card-actions">
-        <button id="copyMarkdown" type="button" disabled>复制 Markdown</button>
-        <button id="downloadMarkdown" type="button" disabled>下载 .md</button>
-      </section>
+      <div id="status" class="status"></div>
 
-      <section>
-        <div class="label">AI 回复 / 阅读卡片</div>
-        <article id="answer" class="answer"></article>
-        <div id="status" class="status"></div>
-      </section>
+      <details class="history">
+        <summary>最近阅读卡片</summary>
+        <div id="historyList"></div>
+      </details>
 
       <details class="settings">
         <summary>API 设置</summary>
@@ -74,11 +86,6 @@
         </label>
         <button id="saveSettings" type="button">保存设置</button>
         <div id="settingsStatus" class="settings-status"></div>
-      </details>
-
-      <details class="history">
-        <summary>最近阅读卡片</summary>
-        <div id="historyList"></div>
       </details>
     </main>
 

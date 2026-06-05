@@ -51,7 +51,8 @@ ai-reading-companion/
 6. 点击扩展图标打开侧边栏。
 7. 在「API 设置」里填写 API Key、Base URL 和 Model。
 8. 如果自动捕获失败，可以手动粘贴选中文本，并修正标题和 URL。
-9. 生成阅读卡片后复制 Markdown，回 Obsidian 粘贴。
+9. 先在陪读对话区进行多轮追问。
+10. 结束阅读时生成阅读卡片，再复制 Markdown 回 Obsidian 粘贴。
 
 ## Obsidian 插件开发
 

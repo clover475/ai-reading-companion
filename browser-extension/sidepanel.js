@@ -7,14 +7,14 @@ const DEFAULT_SETTINGS = {
 };
 
 const MAX_HISTORY = 20;
+const MAX_CONVERSATION_MESSAGES = 12;
 
 const ACTION_INSTRUCTIONS = {
-  free: "回应用户的自由提问。结合网页标题、链接、选中文本和用户问题，不要只做机械翻译。",
+  free: "回应用户的自由追问。结合阅读来源、选中文本和前面对话，不要只做机械翻译。",
   explain: "解释这段内容。先说核心意思，再说它在当前网页或书籍片段里的作用。",
   simplify: "把这段讲简单一点。使用更短的句子、生活化比喻或一个小例子。",
   stuck: "用户读不进去了。不要继续输出大量知识。先安抚，再把任务拆到一句话、一个关键词或一个小问题。",
-  respond: "回应用户的想法、困惑、评论或标注。肯定合理直觉，帮用户说清楚它为什么重要，并连接回选中文本。",
-  card: "生成一张 Markdown 阅读卡片。必须包含阅读来源、标题、URL、时间、选中文本摘要和用户理解。"
+  respond: "回应用户的想法、困惑、评论或标注。肯定合理直觉，帮用户说清楚它为什么重要，并连接回选中文本。"
 };
 
 const state = {
@@ -26,13 +26,16 @@ const state = {
 
 const els = {
   refreshSelection: document.getElementById("refreshSelection"),
+  clearConversation: document.getElementById("clearConversation"),
   sourceTitle: document.getElementById("sourceTitle"),
   sourceUrl: document.getElementById("sourceUrl"),
   sourceMeta: document.getElementById("sourceMeta"),
   selectionPreview: document.getElementById("selectionPreview"),
+  conversationList: document.getElementById("conversationList"),
   userInput: document.getElementById("userInput"),
-  answer: document.getElementById("answer"),
   status: document.getElementById("status"),
+  generateCard: document.getElementById("generateCard"),
+  cardPreview: document.getElementById("cardPreview"),
   copyMarkdown: document.getElementById("copyMarkdown"),
   downloadMarkdown: document.getElementById("downloadMarkdown"),
   apiKey: document.getElementById("apiKey"),
@@ -50,8 +53,11 @@ async function init() {
   await loadSettings();
   await refreshSelection();
   await renderHistory();
+  renderConversation();
 
   els.refreshSelection.addEventListener("click", refreshSelection);
+  els.clearConversation.addEventListener("click", clearConversation);
+  els.generateCard.addEventListener("click", generateReadingCard);
   els.saveSettings.addEventListener("click", saveSettings);
   els.copyMarkdown.addEventListener("click", copyLatestMarkdown);
   els.downloadMarkdown.addEventListener("click", downloadLatestMarkdown);
@@ -116,7 +122,6 @@ async function saveSettings() {
 }
 
 function renderSettingsStatus() {
-  if (!els.settingsStatus) return;
   els.settingsStatus.textContent = state.settings.apiKey
     ? `API 已配置 · ${state.settings.model} · ${state.settings.baseUrl}`
     : "API 未配置：请填写 API Key。";
@@ -218,63 +223,85 @@ function syncSelectionFromPanel() {
 }
 
 async function runAction(action) {
-  syncSelectionFromPanel();
-  if (!state.selection?.selectedText) {
-    await refreshSelection();
-    syncSelectionFromPanel();
-  }
-  const selection = state.selection;
+  const ok = await ensureSessionReady();
+  if (!ok) return;
+
   const userInput = els.userInput.value.trim();
-
-  if (!selection?.selectedText) {
-    setStatus("请先在当前网页中选中一段文字。");
-    return;
-  }
-
   if (action === "respond" && !userInput) {
     setStatus("请先在输入框写下你的想法、困惑或评论。");
     return;
   }
-
   if (action === "free" && !userInput) {
     setStatus("「发送」适合自由提问；如果不想输入问题，可以直接点「解释这段」。");
     return;
   }
-
   if (!state.settings.apiKey) {
     setStatus("请先在 API 设置里填写 API Key。");
     return;
   }
 
+  const userMessage = describeUserTurn(action, userInput);
+  state.conversation.push({ role: "user", content: userMessage });
+  els.userInput.value = "";
+  renderConversation("AI 正在陪你读这段，稍等一下。");
   setBusy(true, "正在和 AI 陪读搭子沟通...");
-  els.answer.textContent = "正在阅读这段文字，稍等一下。";
 
   try {
-    const userTurn = describeUserTurn(action, userInput);
-    state.conversation.push({ role: "user", content: userTurn });
-
-    const answer = await callCompanionApi(action, selection, userInput);
+    const answer = await callCompanionApi(action, state.selection, userInput);
     state.conversation.push({ role: "assistant", content: answer });
-    state.latestMarkdown = answer;
-    els.answer.textContent = answer;
-
-    const isCard = action === "card" || answer.trim().startsWith("# 今日陪读卡片");
-    els.copyMarkdown.disabled = false;
-    els.downloadMarkdown.disabled = false;
-
-    if (isCard) {
-      await saveCardToHistory(answer, selection);
-      await renderHistory();
-    }
-
+    renderConversation();
     setStatus("完成");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    els.answer.textContent = `请求失败：${message}`;
+    state.conversation.push({ role: "assistant", content: `请求失败：${message}` });
+    renderConversation();
     setStatus(message);
   } finally {
     setBusy(false);
   }
+}
+
+async function generateReadingCard() {
+  const ok = await ensureSessionReady();
+  if (!ok) return;
+  if (!state.settings.apiKey) {
+    setStatus("请先在 API 设置里填写 API Key。");
+    return;
+  }
+
+  setBusy(true, "正在生成阅读卡片...");
+  els.cardPreview.textContent = "正在把这次陪读整理成 Markdown 阅读卡片。";
+  els.cardPreview.classList.remove("empty");
+
+  try {
+    const markdown = await callCompanionApi("card", state.selection, "");
+    state.latestMarkdown = markdown;
+    els.cardPreview.textContent = markdown;
+    els.copyMarkdown.disabled = false;
+    els.downloadMarkdown.disabled = false;
+    await saveCardToHistory(markdown, state.selection);
+    await renderHistory();
+    setStatus("阅读卡片已生成，可以复制回 Obsidian。");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    els.cardPreview.textContent = `生成失败：${message}`;
+    setStatus(message);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function ensureSessionReady() {
+  syncSelectionFromPanel();
+  if (!state.selection?.selectedText) {
+    await refreshSelection();
+    syncSelectionFromPanel();
+  }
+  if (!state.selection?.selectedText) {
+    setStatus("请先选中或粘贴一段想一起读的文字。");
+    return false;
+  }
+  return true;
 }
 
 async function callCompanionApi(action, selection, userInput) {
@@ -287,10 +314,7 @@ async function callCompanionApi(action, selection, userInput) {
     },
     body: JSON.stringify({
       model: state.settings.model,
-      messages: [
-        { role: "system", content: buildSystemPrompt() },
-        { role: "user", content: buildUserPrompt(action, selection, userInput) }
-      ],
+      messages: buildApiMessages(action, selection, userInput),
       temperature: 0.7
     })
   });
@@ -306,6 +330,34 @@ async function callCompanionApi(action, selection, userInput) {
   return content.trim();
 }
 
+function buildApiMessages(action, selection, userInput) {
+  const messages = [{ role: "system", content: buildSystemPrompt() }];
+  messages.push({ role: "user", content: buildReadingContext(selection) });
+
+  const history = state.conversation.slice(-MAX_CONVERSATION_MESSAGES);
+  for (const turn of history) {
+    messages.push({ role: turn.role, content: turn.content });
+  }
+
+  if (action === "card") {
+    messages.push({ role: "user", content: buildCardPrompt(selection) });
+  } else {
+    messages.push({
+      role: "user",
+      content: [
+        `当前任务：${ACTION_INSTRUCTIONS[action]}`,
+        "",
+        "用户补充输入：",
+        userInput || "无额外输入",
+        "",
+        "请延续前面的陪读对话，直接回复用户。"
+      ].join("\n")
+    });
+  }
+
+  return messages;
+}
+
 function buildSystemPrompt() {
   const lengthGuide = {
     short: "默认回答控制在 3-5 句，必要时使用极短 bullet。",
@@ -319,99 +371,122 @@ function buildSystemPrompt() {
     "你的语气温柔、稳定、清晰，不催促用户高效，不批评用户读得慢，不输出鸡汤。",
     "你的目标是帮助用户读懂一点点，并愿意继续读下去。",
     "你只能看到用户主动选中的文字、网页标题、链接和本次对话。不要假装看过整个网页或整本书。",
+    "多轮对话时，请记住前面的追问和你的回答，避免重复解释。",
     "如果上下文不足，请温和提示用户多选一点前后文。",
     "用户读不进去时，请降低任务难度，让任务小到可以马上开始。",
-    "生成阅读卡片时，必须保留网页标题、来源站点、URL、时间和选中文本摘要。",
+    "生成阅读卡片时，必须保留网页标题、来源站点、URL、时间和对话中出现的理解/困惑。",
     lengthGuide
   ].join("\n");
 }
 
-function buildUserPrompt(action, selection, userInput) {
-  if (action === "card") {
-    return [
-      "请生成一张可直接复制到 Obsidian 的 Markdown 阅读卡片。",
-      "",
-      "格式必须是：",
-      "# 今日陪读卡片",
-      "",
-      "## 阅读来源",
-      `- 标题：${selection.title || "未命名网页"}`,
-      `- 来源：${selection.siteName || selection.origin || "未知来源"}`,
-      `- URL：${selection.url || "无"}`,
-      `- 时间：${formatDateTime(selection.capturedAt)}`,
-      "",
-      "## 我读到的位置",
-      "根据选中文本描述，不要编造章节。",
-      "",
-      "## 我划线的内容",
-      "> 用不超过 250 字摘录或概括选中文本。",
-      "",
-      "## 我关注的重点",
-      "- ...",
-      "",
-      "## 我今天理解到",
-      "- ...",
-      "",
-      "## 我还没理解",
-      "- ...",
-      "",
-      "## AI 给我的一句提醒",
-      "...",
-      "",
-      "网页信息：",
-      JSON.stringify(selection, null, 2),
-      "",
-      "用户输入：",
-      userInput || "无额外输入",
-      "",
-      "本次对话：",
-      conversationAsMarkdown()
-    ].join("\n");
-  }
-
+function buildReadingContext(selection) {
   return [
-    `任务类型：${action}`,
-    `任务说明：${ACTION_INSTRUCTIONS[action]}`,
+    "阅读来源：",
+    `- 标题：${selection.title || "未命名网页"}`,
+    `- 来源：${selection.siteName || selection.origin || "未知来源"}`,
+    `- URL：${selection.url || "无"}`,
+    `- 捕获时间：${formatDateTime(selection.capturedAt)}`,
     "",
-    "网页标题：",
-    selection.title || "未命名网页",
+    "用户当前选中的阅读材料：",
+    selection.selectedText
+  ].join("\n");
+}
+
+function buildCardPrompt(selection) {
+  return [
+    "请基于阅读来源、选中文本和完整陪读对话，生成一张可直接复制到 Obsidian 的 Markdown 阅读卡片。",
+    "卡片要体现用户这次对话里的追问、已经理解的内容，以及还没理解的点。",
     "",
-    "来源站点：",
-    selection.siteName || selection.origin || "未知来源",
+    "格式必须是：",
+    "# 今日陪读卡片",
     "",
-    "URL：",
-    selection.url || "无",
+    "## 阅读来源",
+    `- 标题：${selection.title || "未命名网页"}`,
+    `- 来源：${selection.siteName || selection.origin || "未知来源"}`,
+    `- URL：${selection.url || "无"}`,
+    `- 时间：${formatDateTime(selection.capturedAt)}`,
     "",
-    "捕获时间：",
-    formatDateTime(selection.capturedAt),
+    "## 我读到的位置",
+    "根据选中文本描述，不要编造章节。",
     "",
-    "用户选中的文本：",
-    selection.selectedText,
+    "## 我划线的内容",
+    "> 用不超过 250 字摘录或概括选中文本。",
     "",
-    "用户输入：",
-    userInput || "无额外输入",
+    "## 本次陪读我问过",
+    "- ...",
     "",
-    "请直接给出陪读式回复。"
+    "## 我关注的重点",
+    "- ...",
+    "",
+    "## 我今天理解到",
+    "- ...",
+    "",
+    "## 我还没理解",
+    "- ...",
+    "",
+    "## AI 给我的一句提醒",
+    "..."
   ].join("\n");
 }
 
 function describeUserTurn(action, userInput) {
   const labels = {
-    free: "自由提问",
-    explain: "解释这段",
-    simplify: "讲简单一点",
+    free: userInput || "继续追问",
+    explain: "请解释这段",
+    simplify: "请讲简单一点",
     stuck: "我读不进去了",
-    respond: "回应我的想法",
-    card: "生成阅读卡片"
+    respond: `回应我的想法：${userInput}`
   };
-  return userInput ? `${labels[action]}：${userInput}` : labels[action];
+  return labels[action] || userInput || action;
 }
 
-function conversationAsMarkdown() {
-  return state.conversation
-    .slice(-8)
-    .map((turn) => `**${turn.role === "user" ? "我" : "AI"}**：\n${turn.content}`)
-    .join("\n\n");
+function renderConversation(pendingText = "") {
+  els.conversationList.innerHTML = "";
+
+  if (state.conversation.length === 0 && !pendingText) {
+    const empty = document.createElement("div");
+    empty.className = "message message--system";
+    empty.innerHTML = '<div class="message__role">AI 陪读搭子</div><div class="message__content">选中或粘贴一段文字后，可以先点「解释这段」。后面你可以继续追问，我会记住这次陪读里的上下文。</div>';
+    els.conversationList.appendChild(empty);
+    return;
+  }
+
+  for (const turn of state.conversation) {
+    els.conversationList.appendChild(createMessageEl(turn.role, turn.content));
+  }
+
+  if (pendingText) {
+    els.conversationList.appendChild(createMessageEl("assistant", pendingText));
+  }
+
+  els.conversationList.scrollTop = els.conversationList.scrollHeight;
+}
+
+function createMessageEl(role, content) {
+  const wrapper = document.createElement("div");
+  wrapper.className = `message message--${role}`;
+
+  const label = document.createElement("div");
+  label.className = "message__role";
+  label.textContent = role === "user" ? "你" : "AI 陪读搭子";
+
+  const body = document.createElement("div");
+  body.className = "message__content";
+  body.textContent = content;
+
+  wrapper.append(label, body);
+  return wrapper;
+}
+
+function clearConversation() {
+  state.conversation = [];
+  state.latestMarkdown = "";
+  els.cardPreview.textContent = "还没有生成阅读卡片。";
+  els.cardPreview.classList.add("empty");
+  els.copyMarkdown.disabled = true;
+  els.downloadMarkdown.disabled = true;
+  renderConversation();
+  setStatus("已开始新的陪读对话。");
 }
 
 async function saveCardToHistory(markdown, selection) {
@@ -458,6 +533,8 @@ async function renderHistory() {
     copyButton.textContent = "复制这张卡片";
     copyButton.addEventListener("click", async () => {
       state.latestMarkdown = item.markdown;
+      els.cardPreview.textContent = item.markdown;
+      els.cardPreview.classList.remove("empty");
       await copyLatestMarkdown();
     });
 
@@ -493,9 +570,7 @@ function setBusy(isBusy, statusText = "") {
     }
     button.disabled = isBusy;
   });
-  if (statusText) {
-    setStatus(statusText);
-  }
+  if (statusText) setStatus(statusText);
 }
 
 function setStatus(text) {
