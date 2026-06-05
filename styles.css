@@ -1,0 +1,77 @@
+.ai-reading-companion {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 12px;
+}
+
+.ai-reading-companion__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-reading-companion__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.ai-reading-companion__section-title {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.ai-reading-companion__preview,
+.ai-reading-companion__answer {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+.ai-reading-companion__preview {
+  max-height: 150px;
+  overflow: auto;
+  color: var(--text-normal);
+  font-size: 13px;
+}
+
+.ai-reading-companion__empty {
+  color: var(--text-muted);
+}
+
+.ai-reading-companion__input {
+  min-height: 88px;
+  width: 100%;
+  resize: vertical;
+}
+
+.ai-reading-companion__button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-reading-companion__button-row button {
+  flex: 1 1 auto;
+}
+
+.ai-reading-companion__answer {
+  min-height: 160px;
+  overflow: auto;
+}
+
+.ai-reading-companion__answer .markdown-rendered {
+  overflow-wrap: anywhere;
+}
+
+.ai-reading-companion__status {
+  color: var(--text-muted);
+  font-size: 12px;
+}
