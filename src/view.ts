@@ -3,6 +3,7 @@ import AIReadingCompanionPlugin from "./main";
 import { callCompanionApi, CompanionAction, CompanionRequest } from "./api";
 
 export const VIEW_TYPE_AI_READING_COMPANION = "ai-reading-companion-view";
+const READABLE_TEXT_EXTENSIONS = new Set(["md", "txt", "csv", "json", "yaml", "yml", "html", "css", "js", "ts"]);
 
 interface ConversationTurn {
   role: "user" | "assistant";
@@ -18,6 +19,7 @@ export class AIReadingCompanionView extends ItemView {
   insertCardButton!: HTMLButtonElement;
   latestCardMarkdown = "";
   lastSelection = "";
+  lastFile: TFile | null = null;
   conversation: ConversationTurn[] = [];
 
   constructor(leaf: WorkspaceLeaf, plugin: AIReadingCompanionPlugin) {
@@ -67,7 +69,7 @@ export class AIReadingCompanionView extends ItemView {
     this.createActionButton(companionRow, "生成阅读卡片", "card");
 
     const cardRow = root.createDiv({ cls: "ai-reading-companion__button-row" });
-    this.insertCardButton = cardRow.createEl("button", { text: "插入到当前笔记末尾" });
+    this.insertCardButton = cardRow.createEl("button", { text: "插入到当前笔记末尾 / 保存卡片" });
     this.insertCardButton.disabled = true;
     this.insertCardButton.addEventListener("click", () => this.insertLatestCard());
 
@@ -89,18 +91,22 @@ export class AIReadingCompanionView extends ItemView {
 
   refreshSelectionPreview(): void {
     const selectedText = this.getSelectedText();
-    this.lastSelection = selectedText;
+    if (selectedText) {
+      this.lastSelection = selectedText;
+      this.lastFile = this.getCurrentFile();
+    }
     this.previewEl.empty();
 
-    if (!selectedText) {
+    if (!selectedText && !this.lastSelection) {
       this.previewEl.createDiv({
-        text: "请先在当前 Markdown 笔记中选中一段想一起读的内容。",
+        text: "请先在当前笔记、PDF 或预览内容中选中一段想一起读的文字。",
         cls: "ai-reading-companion__empty"
       });
       return;
     }
 
-    this.previewEl.setText(selectedText.length > 1200 ? `${selectedText.slice(0, 1200)}...` : selectedText);
+    const previewText = selectedText || this.lastSelection;
+    this.previewEl.setText(previewText.length > 1200 ? `${previewText.slice(0, 1200)}...` : previewText);
   }
 
   getMarkdownView(): MarkdownView | null {
@@ -120,8 +126,10 @@ export class AIReadingCompanionView extends ItemView {
 
   getSelectedText(): string {
     const view = this.getMarkdownView();
-    if (!view) return "";
-    return view.editor.getSelection().trim();
+    const editorSelection = view?.editor.getSelection().trim();
+    if (editorSelection) return editorSelection;
+
+    return window.getSelection()?.toString().trim() ?? "";
   }
 
   getSelectionOffset(): number {
@@ -135,7 +143,26 @@ export class AIReadingCompanionView extends ItemView {
   }
 
   getCurrentFile(): TFile | null {
-    return this.getMarkdownView()?.file ?? null;
+    return this.getMarkdownView()?.file ?? this.app.workspace.getActiveFile();
+  }
+
+  async buildCurrentContext(file: TFile | null, selectedText: string): Promise<string> {
+    const view = this.getMarkdownView();
+    if (view) {
+      return this.buildNoteContext(view.editor.getValue(), selectedText, this.getSelectionOffset());
+    }
+
+    if (file && READABLE_TEXT_EXTENSIONS.has(file.extension.toLowerCase())) {
+      const fileText = await this.app.vault.cachedRead(file);
+      return this.buildNoteContext(fileText, selectedText, fileText.indexOf(selectedText));
+    }
+
+    const sourceName = file ? `${file.path}` : "当前 Obsidian 视图";
+    return [
+      `当前资料：${sourceName}`,
+      "MVP 暂不自动解析 PDF、图片、Office 文档或第三方插件视图的全文。",
+      "请只基于用户当前选中的文本、文件名和本次对话作答；如果上下文不足，请温和说明需要用户多选一点内容。"
+    ].join("\n");
   }
 
   buildNoteContext(fullText: string, selectedText: string, selectionOffset: number): string {
@@ -165,15 +192,9 @@ export class AIReadingCompanionView extends ItemView {
   async runAction(action: CompanionAction): Promise<void> {
     this.refreshSelectionPreview();
 
-    const view = this.getMarkdownView();
-    const file = this.getCurrentFile();
+    const file = this.getCurrentFile() ?? this.lastFile;
     const selectedText = this.lastSelection;
     const userInput = this.inputEl.value.trim();
-
-    if (!view || !file) {
-      new Notice("请先打开一个 Markdown 笔记。");
-      return;
-    }
 
     if (!selectedText) {
       new Notice("请先选中一段想一起读的内容。");
@@ -188,11 +209,10 @@ export class AIReadingCompanionView extends ItemView {
     this.setBusy(true, "正在和 AI 陪读搭子沟通...");
 
     try {
-      const fullText = view.editor.getValue();
       const request: CompanionRequest = {
         action,
-        fileName: file.basename,
-        noteContext: this.buildNoteContext(fullText, selectedText, this.getSelectionOffset()),
+        fileName: file?.basename ?? "当前 Obsidian 视图",
+        noteContext: await this.buildCurrentContext(file, selectedText),
         selectedText,
         userInput,
         conversationMarkdown: this.conversationAsMarkdown()
@@ -257,7 +277,8 @@ export class AIReadingCompanionView extends ItemView {
 
     const view = this.getMarkdownView();
     if (!view) {
-      new Notice("请先打开要插入卡片的 Markdown 笔记。");
+      await this.saveLatestCardToReadingCards();
+      new Notice("当前不是 Markdown 笔记，已保存到 Reading Cards 文件夹。");
       return;
     }
 
@@ -265,5 +286,27 @@ export class AIReadingCompanionView extends ItemView {
     const card = this.latestCardMarkdown.trim();
     view.editor.setValue(`${current.trimEnd()}\n\n---\n\n${card}\n`);
     new Notice("已插入到当前笔记末尾。");
+  }
+
+  async saveLatestCardToReadingCards(): Promise<void> {
+    const activeFile = this.getCurrentFile() ?? this.lastFile;
+    const baseName = activeFile?.basename ?? "Obsidian 陪读";
+    const safeName = baseName.replace(/[\\/:*?"<>|]/g, "-");
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const folder = "Reading Cards";
+    const path = `${folder}/${stamp} - ${safeName}.md`;
+
+    if (!this.app.vault.getAbstractFileByPath(folder)) {
+      await this.app.vault.createFolder(folder);
+    }
+
+    const existing = this.app.vault.getAbstractFileByPath(path);
+    const content = `${this.latestCardMarkdown.trim()}\n`;
+    if (existing instanceof TFile) {
+      await this.app.vault.append(existing, `\n---\n\n${content}`);
+    } else {
+      await this.app.vault.create(path, content);
+    }
   }
 }
