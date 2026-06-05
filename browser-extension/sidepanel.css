@@ -196,6 +196,13 @@ select {
   font-size: 12px;
 }
 
+.settings-status {
+  min-height: 18px;
+  margin-top: 8px;
+  color: #68707d;
+  font-size: 12px;
+}
+
 .history-item {
   display: grid;
   gap: 6px;

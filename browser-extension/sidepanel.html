@@ -26,8 +26,8 @@
       </section>
 
       <section>
-        <div class="label">想问什么</div>
-        <textarea id="userInput" placeholder="例如：这段什么意思？用产品经理视角解释。这个概念和 RAG 有什么关系？"></textarea>
+        <div class="label">想问什么 / 可选</div>
+        <textarea id="userInput" placeholder="可不填。直接点「解释这段」「讲简单一点」「我读不进去了」也可以。"></textarea>
       </section>
 
       <section class="actions">
@@ -73,6 +73,7 @@
           </select>
         </label>
         <button id="saveSettings" type="button">保存设置</button>
+        <div id="settingsStatus" class="settings-status"></div>
       </details>
 
       <details class="history">

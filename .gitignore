@@ -1,4 +1,4 @@
 node_modules/
 .DS_Store
 *.log
-
+browser-extension/local-settings.json

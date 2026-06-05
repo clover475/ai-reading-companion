@@ -40,6 +40,7 @@ const els = {
   model: document.getElementById("model"),
   replyLength: document.getElementById("replyLength"),
   saveSettings: document.getElementById("saveSettings"),
+  settingsStatus: document.getElementById("settingsStatus"),
   historyList: document.getElementById("historyList")
 };
 
@@ -57,6 +58,10 @@ async function init() {
   els.selectionPreview.addEventListener("input", syncSelectionFromPanel);
   els.sourceTitle.addEventListener("input", syncSelectionFromPanel);
   els.sourceUrl.addEventListener("input", syncSelectionFromPanel);
+  els.apiKey.addEventListener("input", debounce(saveSettings, 350));
+  els.baseUrl.addEventListener("input", debounce(saveSettings, 350));
+  els.model.addEventListener("input", debounce(saveSettings, 350));
+  els.replyLength.addEventListener("change", saveSettings);
 
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => runAction(button.dataset.action));
@@ -65,11 +70,27 @@ async function init() {
 
 async function loadSettings() {
   const stored = await chrome.storage.local.get(["settings"]);
-  state.settings = { ...DEFAULT_SETTINGS, ...(stored.settings || {}) };
+  const localSettings = await loadLocalSettings();
+  const storedSettings = stored.settings || {};
+  state.settings = { ...DEFAULT_SETTINGS, ...localSettings, ...storedSettings };
+  if (!storedSettings.apiKey && localSettings.apiKey) {
+    await chrome.storage.local.set({ settings: state.settings });
+  }
   els.apiKey.value = state.settings.apiKey;
   els.baseUrl.value = state.settings.baseUrl;
   els.model.value = state.settings.model;
   els.replyLength.value = state.settings.replyLength;
+  renderSettingsStatus();
+}
+
+async function loadLocalSettings() {
+  try {
+    const response = await fetch(chrome.runtime.getURL("local-settings.json"), { cache: "no-store" });
+    if (!response.ok) return {};
+    return await response.json();
+  } catch {
+    return {};
+  }
 }
 
 async function saveSettings() {
@@ -81,7 +102,15 @@ async function saveSettings() {
     replyLength: els.replyLength.value || DEFAULT_SETTINGS.replyLength
   };
   await chrome.storage.local.set({ settings: state.settings });
+  renderSettingsStatus();
   setStatus("设置已保存");
+}
+
+function renderSettingsStatus() {
+  if (!els.settingsStatus) return;
+  els.settingsStatus.textContent = state.settings.apiKey
+    ? `API 已配置 · ${state.settings.model} · ${state.settings.baseUrl}`
+    : "API 未配置：请填写 API Key。";
 }
 
 async function refreshSelection() {
@@ -195,6 +224,11 @@ async function runAction(action) {
 
   if (action === "respond" && !userInput) {
     setStatus("请先在输入框写下你的想法、困惑或评论。");
+    return;
+  }
+
+  if (action === "free" && !userInput) {
+    setStatus("「发送」适合自由提问；如果不想输入问题，可以直接点「解释这段」。");
     return;
   }
 
@@ -471,6 +505,14 @@ function formatDateSlug(value) {
 
 function sanitizeFileName(name) {
   return name.replace(/[\\/:*?"<>|]/g, "-").slice(0, 80);
+}
+
+function debounce(fn, delay) {
+  let timer = null;
+  return (...args) => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => fn(...args), delay);
+  };
 }
 
 function safeHostname(url) {
