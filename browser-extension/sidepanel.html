@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI 陪读搭子</title>
+    <link rel="stylesheet" href="sidepanel.css">
+  </head>
+  <body>
+    <main class="app">
+      <header class="header">
+        <h1>AI 陪读搭子</h1>
+        <button id="refreshSelection" type="button">刷新选区</button>
+      </header>
+
+      <section class="source">
+        <div class="label">当前来源</div>
+        <div id="sourceTitle" class="source-title">未捕获网页</div>
+        <a id="sourceUrl" class="source-url" href="#" target="_blank" rel="noreferrer"></a>
+      </section>
+
+      <section>
+        <div class="label">当前选中文本</div>
+        <div id="selectionPreview" class="preview empty">请先在网页、微信读书或文章页面中选中一段想一起读的文字。</div>
+      </section>
+
+      <section>
+        <div class="label">想问什么</div>
+        <textarea id="userInput" placeholder="例如：这段什么意思？用产品经理视角解释。这个概念和 RAG 有什么关系？"></textarea>
+      </section>
+
+      <section class="actions">
+        <button data-action="free" type="button">发送</button>
+        <button data-action="explain" type="button">解释这段</button>
+        <button data-action="simplify" type="button">讲简单一点</button>
+        <button data-action="stuck" type="button">我读不进去了</button>
+        <button data-action="respond" type="button">回应我的想法</button>
+        <button data-action="card" type="button" class="wide">生成阅读卡片</button>
+      </section>
+
+      <section class="card-actions">
+        <button id="copyMarkdown" type="button" disabled>复制 Markdown</button>
+        <button id="downloadMarkdown" type="button" disabled>下载 .md</button>
+      </section>
+
+      <section>
+        <div class="label">AI 回复 / 阅读卡片</div>
+        <article id="answer" class="answer"></article>
+        <div id="status" class="status"></div>
+      </section>
+
+      <details class="settings">
+        <summary>API 设置</summary>
+        <label>
+          API Key
+          <input id="apiKey" type="password" placeholder="sk-...">
+        </label>
+        <label>
+          Base URL
+          <input id="baseUrl" type="text" placeholder="https://api.openai.com/v1">
+        </label>
+        <label>
+          Model
+          <input id="model" type="text" placeholder="gpt-4o-mini">
+        </label>
+        <label>
+          回复长度
+          <select id="replyLength">
+            <option value="short">短</option>
+            <option value="medium">中</option>
+            <option value="long">长</option>
+          </select>
+        </label>
+        <button id="saveSettings" type="button">保存设置</button>
+      </details>
+
+      <details class="history">
+        <summary>最近阅读卡片</summary>
+        <div id="historyList"></div>
+      </details>
+    </main>
+
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

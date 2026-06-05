@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "AI Reading Companion",
+  "version": "0.1.0",
+  "description": "AI 陪读搭子浏览器版：围绕网页选中文本陪读，并生成带来源信息的 Markdown 阅读卡片。",
+  "permissions": [
+    "activeTab",
+    "sidePanel",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "AI 陪读搭子"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}
